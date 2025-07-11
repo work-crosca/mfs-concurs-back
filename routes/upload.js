@@ -27,7 +27,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     const { nickname, email, category, description } = req.body;
     const fileUrl = `/uploads/${req.file.filename}`;
 
-    // salvează în mongo
+    // salvează în Mongo
     const newUpload = await Upload.create({
       nickname,
       email,
@@ -36,12 +36,37 @@ router.post("/", upload.single("file"), async (req, res) => {
       fileUrl
     });
 
-    console.log("✔ Upload saved:", newUpload);
+    console.log("✔ Upload salvat în Mongo:", newUpload);
+
+    // trimite pe Telegram
+    await sendToTelegram({
+      nickname,
+      email,
+      category,
+      description,
+      filePath: path.join(process.cwd(), "uploads", req.file.filename)
+    });
+
     res.json({ success: true, data: newUpload });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Eroare la salvare în MongoDB" });
+    res.status(500).json({ success: false, message: "Eroare la upload" });
   }
 });
+
+async function sendToTelegram({ nickname, email, category, description, filePath }) {
+  const botToken = process.env.TELEGRAM_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  const formData = new FormData();
+  formData.append("chat_id", chatId);
+  formData.append("caption", `📥 Nouă înscriere:\n👤 ${nickname}\n✉️ ${email}\n🎨 ${category}\n📝 ${description}`);
+  formData.append("document", fs.createReadStream(filePath));
+
+  await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+    method: "POST",
+    body: formData
+  });
+}
 
 export default router;
