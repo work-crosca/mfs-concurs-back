@@ -32,6 +32,16 @@ router.post("/", upload.single("file"), async (req, res) => {
     const { nickname, email, category, description } = req.body;
     const fileUrl = `/uploads/${req.file.filename}`;
 
+    // verifică dacă userul cu acest email are deja 5 înregistrări pentru această categorie
+    const count = await Upload.countDocuments({ email, category });
+    if (count >= 5) {
+      console.log(chalk.yellow(`⚠️ User ${email} are deja ${count} înregistrări la categoria ${category}.`));
+      return res.status(400).json({
+        success: false,
+        message: `Ai atins limita de 5 înscrieri pentru categoria "${category}".`
+      });
+    }
+
     // Salvează în Mongo
     const newUpload = await Upload.create({
       nickname,
@@ -53,6 +63,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     });
 
     res.json({ success: true, data: newUpload });
+
   } catch (err) {
     console.error(chalk.red("❌ Eroare la upload:"), err);
     res.status(500).json({ success: false, message: "Eroare la upload" });
