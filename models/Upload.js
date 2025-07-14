@@ -13,7 +13,11 @@ const uploadSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  likesCount: {
+    type: Number,
+    default: 0
+  },
 });
 
 export default mongoose.models.Upload || mongoose.model("Upload", uploadSchema);
