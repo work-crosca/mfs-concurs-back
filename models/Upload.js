@@ -6,6 +6,10 @@ const uploadSchema = new mongoose.Schema({
   category: String,
   description: String,
   fileUrl: String,
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
