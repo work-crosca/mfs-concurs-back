@@ -1,5 +1,5 @@
 import express from "express";
-import Like from "../models/Like.js";
+import Like from "../models/Likes.js";
 import Upload from "../models/Upload.js";
 
 const router = express.Router();
