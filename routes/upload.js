@@ -2,44 +2,75 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import FormData from "form-data";
-import fetch from "node-fetch";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import chalk from "chalk";
 import Upload from "../models/Upload.js";
+import fetch from "node-fetch";
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Storage pentru Multer
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const dir = "./uploads";
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    const nickname = req.body.nickname
-      ?.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, "_").toLowerCase() || "file";
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + "-" + nickname + ext);
+// Config MinIO client
+const s3 = new S3Client({
+  endpoint: process.env.MINIO_ENDPOINT,
+  region: "us-east-1",
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.MINIO_ACCESS_KEY,
+    secretAccessKey: process.env.MINIO_SECRET_KEY
   }
 });
-const upload = multer({ storage });
 
-// POST /api/upload
+// Mapare user-friendly categorii
+const categoryMap = {
+  sport: "Sport & Active Lifestyle",
+  digital: "Digital & Urban Vibes",
+  traditions: "Moldova – My Love",
+  nature: "Eco Pulse",
+  freestyle: "Freestyle"
+};
+
 router.post("/", upload.single("file"), async (req, res) => {
   try {
     const { nickname, email, category, description } = req.body;
-    const fileUrl = `/uploads/${req.file.filename}`;
 
-    // verifică dacă userul cu acest email are deja 5 înregistrări pentru această categorie
+    // verifică limita
     const count = await Upload.countDocuments({ email, category });
     if (count >= 5) {
-      console.log(chalk.yellow(`⚠️ User ${email} are deja ${count} înregistrări la categoria ${category}.`));
+      const friendlyCategory = categoryMap[category] || category;
+      console.log(chalk.yellow(`⚠️ User ${email} are deja ${count} înregistrări la categoria ${friendlyCategory}.`));
+
       return res.status(400).json({
         success: false,
-        message: `Ai atins limita de 5 înscrieri pentru categoria "${category}".`
+        message: `Ai atins limita de 5 înscrieri pentru categoria "${friendlyCategory}".`
       });
+    }
+
+    let fileUrl;
+    const bucket = process.env.MINIO_BUCKET || "uploads";
+    const fileName = `${Date.now()}-${nickname.replace(/\s+/g, "_")}.png`;
+
+    try {
+      // Încearcă să urce în MinIO
+      await s3.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: fileName,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype
+      }));
+
+      fileUrl = `${process.env.MINIO_PUBLIC_URL}/${bucket}/${fileName}`;
+      console.log(chalk.green("✔ Fișier urcat pe MinIO:"), fileUrl);
+    } catch (err) {
+      console.error(chalk.yellow("⚠️ MinIO eșuat, fallback pe local:"), err);
+
+      // fallback pe local
+      const localDir = "./uploads";
+      if (!fs.existsSync(localDir)) fs.mkdirSync(localDir);
+      const localPath = path.join(localDir, fileName);
+      fs.writeFileSync(localPath, req.file.buffer);
+      fileUrl = `/uploads/${fileName}`;
+      console.log(chalk.green("✔ Fișier salvat local:"), fileUrl);
     }
 
     // Salvează în Mongo
@@ -57,9 +88,9 @@ router.post("/", upload.single("file"), async (req, res) => {
     await sendToTelegram({
       nickname,
       email,
-      category,
+      category: categoryMap[category] || category,
       description,
-      filePath: path.join(process.cwd(), "uploads", req.file.filename)
+      fileUrl
     });
 
     res.json({ success: true, data: newUpload });
@@ -70,35 +101,31 @@ router.post("/", upload.single("file"), async (req, res) => {
   }
 });
 
-async function sendToTelegram({ nickname, email, category, description, filePath }) {
+async function sendToTelegram({ nickname, email, category, description, fileUrl }) {
   try {
     const botToken = process.env.TELEGRAM_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
 
-    const formData = new FormData();
-    formData.append("chat_id", chatId);
-    formData.append(
-      "caption",
-      `📥 Nouă înscriere:\n👤 ${nickname}\n✉️ ${email}\n🎨 ${category}\n📝 ${description}`
-    );
-    formData.append("document", fs.createReadStream(filePath));
+    const text = `📥 Nouă înscriere:
+👤 ${nickname}
+✉️ ${email}
+🎨 ${category}
+📝 ${description}
+📎 ${fileUrl}`;
 
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
-      body: formData
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text })
     });
 
     const result = await response.json();
-    console.log(chalk.blue("📨 Telegram API răspuns:"), result);
-
-    if (!result.ok) {
-      throw new Error(`Telegram API error: ${result.description}`);
-    }
+    if (!result.ok) throw new Error(`Telegram error: ${result.description}`);
 
     console.log(chalk.green("✅ Trimis cu succes pe Telegram"));
   } catch (error) {
-    console.error(chalk.red("❌ Eroare la trimiterea către Telegram:"), error);
-    throw error; 
+    console.error(chalk.red("❌ Eroare la Telegram:"), error);
+    throw error;
   }
 }
 
