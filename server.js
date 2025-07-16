@@ -6,12 +6,17 @@ import { connectDB } from "./db.js";
 import uploadRoutes from "./routes/upload.js";
 import likesRoutes from "./routes/likes.js";
 import imagesRoutes from "./routes/images.js";
+import otpRoutes from "./routes/otpRoutes.js";
+
 
 
 const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(process.cwd(), "uploads")));
+
+app.use("/api", otpRoutes);
+
 app.use("/api/images", imagesRoutes);
 app.use("/api/likes", likesRoutes);
 
