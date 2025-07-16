@@ -13,7 +13,10 @@ router.post("/send-otp", async (req, res) => {
    if (!email) {
      return res.status(400).json({ success: false, message: "Email lipsă." });
    }
- 
+
+   return res.json({ success: true, message: "Simulat OTP trimis." });
+
+ /*
    try {
      const data = qs.stringify({
        system: SYSTEM_NAME,
@@ -72,9 +75,9 @@ router.post("/send-otp", async (req, res) => {
        success: false,
        message: "Eroare la comunicarea cu serviciul OTP."
      });
-   }
+   }*/
  });
- 
+
  router.post("/verify-otp", async (req, res) => {
    const { email, code } = req.body;
  
