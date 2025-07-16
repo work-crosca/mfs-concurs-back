@@ -10,7 +10,7 @@ import fetch from "node-fetch";
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Config MinIO client
+//  MinIO client
 const s3 = new S3Client({
   endpoint: process.env.MINIO_ENDPOINT,
   region: "us-east-1",
@@ -21,7 +21,7 @@ const s3 = new S3Client({
   }
 });
 
-// Mapare user-friendly categorii
+//user-friendly category labels
 const categoryMap = {
   sport: "Sport & Active Lifestyle",
   digital: "Digital & Urban Vibes",
@@ -51,7 +51,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     const fileName = `${Date.now()}-${nickname.replace(/\s+/g, "_")}.png`;
 
     try {
-      // Încearcă să urce în MinIO
+      // try to upload in MinIO
       await s3.send(new PutObjectCommand({
         Bucket: bucket,
         Key: fileName,
@@ -69,11 +69,11 @@ router.post("/", upload.single("file"), async (req, res) => {
       if (!fs.existsSync(localDir)) fs.mkdirSync(localDir);
       const localPath = path.join(localDir, fileName);
       fs.writeFileSync(localPath, req.file.buffer);
-      fileUrl = `/uploads/${fileName}`;
+      fileUrl = `${process.env.LOCAL_PUBLIC_URL || ""}/uploads/${fileName}`;
       console.log(chalk.green("✔ Fișier salvat local:"), fileUrl);
     }
 
-    // Salvează în Mongo
+    // Mongo
     const newUpload = await Upload.create({
       nickname,
       email,
@@ -84,7 +84,7 @@ router.post("/", upload.single("file"), async (req, res) => {
 
     console.log(chalk.green("✔ Upload salvat în MongoDB:"), newUpload);
 
-    // Trimite pe Telegram
+    // Telegram
     await sendToTelegram({
       nickname,
       email,
@@ -106,23 +106,26 @@ async function sendToTelegram({ nickname, email, category, description, fileUrl 
     const botToken = process.env.TELEGRAM_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
 
-    const text = `📥 Nouă înscriere:
-👤 ${nickname}
-✉️ ${email}
-🎨 ${category}
-📝 ${description}
-📎 ${fileUrl}`;
+    const caption = `📥 Nouă înscriere:\n` +
+                    `👤 ${nickname}\n` +
+                    `✉️ ${email}\n` +
+                    `🎨 ${category}\n` +
+                    `📝 ${description}`;
 
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text })
+      body: JSON.stringify({
+        chat_id: chatId,
+        document: fileUrl,
+        caption
+      })
     });
 
     const result = await response.json();
     if (!result.ok) throw new Error(`Telegram error: ${result.description}`);
 
-    console.log(chalk.green("✅ Trimis cu succes pe Telegram"));
+    console.log(chalk.green("✅ Document trimis cu succes pe Telegram"));
   } catch (error) {
     console.error(chalk.red("❌ Eroare la Telegram:"), error);
     throw error;
