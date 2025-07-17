@@ -10,7 +10,6 @@ import fetch from "node-fetch";
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Config MinIO client
 const s3 = new S3Client({
   endpoint: process.env.MINIO_ENDPOINT,
   region: "us-east-1",
@@ -33,7 +32,7 @@ router.post("/", upload.single("file"), async (req, res) => {
   try {
     const { nickname, email, category, description } = req.body;
 
-    if (!nickname || !email || !category || !description || !req.file) {
+    if (!nickname || !email || !category || !req.file) {
       return res.status(400).json({
         success: false,
         message: "All form fields and the uploaded file are mandatory.",
@@ -45,13 +44,13 @@ router.post("/", upload.single("file"), async (req, res) => {
       const friendlyCategory = categoryMap[category] || category;
       console.log(
         chalk.yellow(
-          `⚠️ User ${email} are deja ${count} înregistrări la categoria ${friendlyCategory}.`
+          `⚠️ User ${email} already has ${count} submissions in category ${friendlyCategory}.`
         )
       );
 
       return res.status(400).json({
         success: false,
-        message: `Ai atins limita de 5 înscrieri pentru categoria "${friendlyCategory}".`,
+        message: `You have reached the submission limit (5) for category "${friendlyCategory}".`,
       });
     }
 
@@ -73,16 +72,16 @@ router.post("/", upload.single("file"), async (req, res) => {
       const publicUrl =
         process.env.MINIO_PUBLIC_URL || "https://e.cdnmoldcell.md";
       fileUrl = `${publicUrl}/${bucket}/${fileName}`;
-      console.log(chalk.green("✔ Fișier urcat pe MinIO:"), fileUrl);
+      console.log(chalk.green("✔ File uploaded to MinIO:"), fileUrl);
     } catch (err) {
-      console.error(chalk.yellow("⚠️ MinIO eșuat, fallback pe local:"), err);
+      console.error(chalk.yellow("⚠️ MinIO failed, falling back to local storage:"), err);
 
       const localDir = "./uploads";
       if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
       const localPath = path.join(localDir, fileName);
       fs.writeFileSync(localPath, req.file.buffer);
       fileUrl = `/uploads/${fileName}`;
-      console.log(chalk.green("✔ Fișier salvat local:"), fileUrl);
+      console.log(chalk.green("✔ File saved locally:"), fileUrl);
     }
 
     const newUpload = await Upload.create({
@@ -93,64 +92,52 @@ router.post("/", upload.single("file"), async (req, res) => {
       fileUrl,
     });
 
-    console.log(chalk.green("✔ Upload salvat în MongoDB:"), newUpload);
+    console.log(chalk.green("✔ Upload saved to MongoDB:"), newUpload);
 
-    await sendToTelegramWithFile({
+    await sendToTelegramMessage({
       nickname,
       email,
       category: categoryMap[category] || category,
       description,
-      fileBuffer: req.file.buffer,
-      fileName,
-      isImage: req.file.mimetype.startsWith("image/"),
+      fileUrl
     });
 
     res.json({ success: true, data: newUpload });
   } catch (err) {
-    console.error(chalk.red("❌ Eroare la upload:"), err);
-    res.status(500).json({ success: false, message: "Eroare la upload" });
+    console.error(chalk.red("❌ Upload failed:"), err);
+    res.status(500).json({ success: false, message: "Upload failed" });
   }
 });
 
-async function sendToTelegramWithFile({
-  nickname,
-  email,
-  category,
-  description,
-  fileBuffer,
-  fileName,
-  isImage,
-}) {
+async function sendToTelegramMessage({ nickname, email, category, description, fileUrl }) {
   try {
     const botToken = process.env.TELEGRAM_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
 
-    const caption = `📥 Nouă înscriere:\n👤 ${nickname}\n✉️ ${email}\n🎨 ${category}\n📝 ${description}`;
+    const text = `📥 New submission:
+👤 ${nickname}
+✉️ ${email}
+🎨 ${category}
+📝 ${description}
+📎 ${fileUrl}`;
 
-    const formData = new FormData();
-    formData.append("chat_id", chatId);
-    formData.append("caption", caption);
-    formData.append(
-      isImage ? "photo" : "document",
-      Buffer.from(fileBuffer),
-      fileName
-    );
-
-    const endpoint = isImage
-      ? `https://api.telegram.org/bot${botToken}/sendPhoto`
-      : `https://api.telegram.org/bot${botToken}/sendDocument`;
-
-    const response = await fetch(endpoint, {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML", 
+        disable_web_page_preview: false 
+      })
     });
 
     const result = await response.json();
     if (!result.ok) throw new Error(`Telegram error: ${result.description}`);
 
-    console.log(chalk.green("✅ Trimis cu succes pe Telegram (ca fișier)"));
+    console.log(chalk.green("✅ Message successfully sent to Telegram"));
   } catch (error) {
-    console.error(chalk.red("❌ Eroare la Telegram:"), error);
+    console.error(chalk.red("❌ Telegram error:"), error);
     throw error;
   }
 }
