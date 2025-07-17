@@ -75,7 +75,7 @@ router.post("/send-otp", async (req, res) => {
        success: false,
        message: "Eroare la comunicarea cu serviciul OTP."
      });
-   }*/
+   }*/ 
  });
 
  router.post("/verify-otp", async (req, res) => {
@@ -87,7 +87,7 @@ router.post("/send-otp", async (req, res) => {
        message: "Email sau OTP lipsă."
      });
    }
- 
+ /*
    try {
      const data = qs.stringify({
        system: SYSTEM_NAME,
@@ -164,7 +164,8 @@ router.post("/send-otp", async (req, res) => {
        success: false,
        message: "Eroare la validare OTP."
      });
-   }
+   }*/
+   return res.json({ success: false, message: "OTP Gresit" });
  });
 
 export default router;
