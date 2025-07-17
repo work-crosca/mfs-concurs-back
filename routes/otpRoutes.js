@@ -7,19 +7,24 @@ const router = express.Router();
 const OTP_SERVICE_BASE = `${process.env.OTP_API_DOMAIN}/${process.env.OTP_API_APP_GUID}/${process.env.OTP_API_SERV_GUID}`;
 const SYSTEM_NAME = process.env.OTP_API_SYSTEM_NAME;
 
+// langId [1 - ro, 2 - ru]
+const allowedLangIds = [1, 2];
+
 router.post("/send-otp", async (req, res) => {
-  const { email } = req.body;
+  const { email, langId } = req.body;
 
   if (!email) {
     return res.status(400).json({ success: false, message: "Email lipsă." });
   }
+
+  const lang = allowedLangIds.includes(Number(langId)) ? Number(langId) : 1;
 
   try {
     const data = qs.stringify({
       system: SYSTEM_NAME,
       destType: "email",
       destination: email,
-      langId: 1,
+      langId: lang,
       expiresMin: 5,
       length: 6,
       chars: "0123456789",
@@ -83,6 +88,7 @@ router.post("/verify-otp", async (req, res) => {
       message: "Email sau OTP lipsă.",
     });
   }
+
   try {
     const data = qs.stringify({
       system: SYSTEM_NAME,
