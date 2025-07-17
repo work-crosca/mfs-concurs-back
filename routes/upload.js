@@ -74,7 +74,10 @@ router.post("/", upload.single("file"), async (req, res) => {
       fileUrl = `${publicUrl}/${bucket}/${fileName}`;
       console.log(chalk.green("✔ File uploaded to MinIO:"), fileUrl);
     } catch (err) {
-      console.error(chalk.yellow("⚠️ MinIO failed, falling back to local storage:"), err);
+      console.error(
+        chalk.yellow("⚠️ MinIO failed, falling back to local storage:"),
+        err
+      );
 
       const localDir = "./uploads";
       if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
@@ -99,7 +102,7 @@ router.post("/", upload.single("file"), async (req, res) => {
       email,
       category: categoryMap[category] || category,
       description,
-      fileUrl
+      fileUrl,
     });
 
     res.json({ success: true, data: newUpload });
@@ -109,7 +112,13 @@ router.post("/", upload.single("file"), async (req, res) => {
   }
 });
 
-async function sendToTelegramMessage({ nickname, email, category, description, fileUrl }) {
+async function sendToTelegramMessage({
+  nickname,
+  email,
+  category,
+  description,
+  fileUrl,
+}) {
   try {
     const botToken = process.env.TELEGRAM_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -118,8 +127,7 @@ async function sendToTelegramMessage({ nickname, email, category, description, f
 👤 ${nickname}
 ✉️ ${email}
 🎨 ${category}
-📝 ${description}
-📎 ${fileUrl}`;
+📝 ${description}`;
 
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -127,9 +135,14 @@ async function sendToTelegramMessage({ nickname, email, category, description, f
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: "HTML", 
-        disable_web_page_preview: false 
-      })
+        parse_mode: "HTML",
+        disable_web_page_preview: false,
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔗 View artwork", url: fileUrl }
+          ]]
+        }
+      }),
     });
 
     const result = await response.json();
