@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const likeSchema = new mongoose.Schema({
   uploadId: { type: mongoose.Schema.Types.ObjectId, ref: "Upload" },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, 
+  userId: { type: String },
   createdAt: {
     type: Date,
     default: Date.now

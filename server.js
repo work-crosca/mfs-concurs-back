@@ -6,7 +6,8 @@ import { connectDB } from "./db.js";
 import uploadRoutes from "./routes/upload.js";
 import likesRoutes from "./routes/likes.js";
 import imagesRoutes from "./routes/images.js";
-import otpRoutes from "./routes/otpRoutes.js";
+import otpRoutes from "./routes/otp.js";
+import adminRoutes from "./routes/admin.js";
 
 const app = express();
 app.use(cors({ origin: "*" }));
@@ -25,12 +26,13 @@ app.get("/health", (req, res) => {
 app.use("/api/images", imagesRoutes);
 app.use("/api/likes", likesRoutes);
 app.use("/api/otp", otpRoutes);
-app.use("/api/upload", uploadRoutes);
+app.use("/api/admin", adminRoutes); 
 
 await connectDB();
 
+app.use("/api/upload", uploadRoutes);
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`Server running on http://localhost:${PORT}`)
 );

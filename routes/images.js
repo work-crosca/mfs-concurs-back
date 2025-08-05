@@ -22,7 +22,6 @@ router.get("/", async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    // număr total pentru client (ex: totalPages)
     const total = await Upload.countDocuments(query);
 
     res.json({
